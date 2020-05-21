@@ -108,7 +108,10 @@ def ir_snapshot(application_shutdown_signal, ir_frames):
             out_file_processed = f"{out_file}_processed.png"
             
             cv2.imwrite(out_file_raw, new_frames[0])
+            print(f"Saved snapshot to {out_file_raw}")
+
             cv2.imwrite(out_file_processed, new_frames[1])
+            print(f"Saved processed snapshot to {out_file_processed}")
 
         except Exception as e:
             pass
@@ -422,7 +425,7 @@ class DualCamera():
             # Is this a snapshot?
             if self.snapshot is True:
                 self.snapshot = False
-                print("taking snapshot")
+                print("Taking snapshot...")
                 self.snapshot_frames.put([self.new_mwir_frame, self.new_post_processed_mwir_frame])
 
         # Get feedback from camera port
