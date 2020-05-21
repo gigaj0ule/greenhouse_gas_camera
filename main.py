@@ -83,7 +83,7 @@ def ir_capture(application_shutdown_signal, ir_frames, is_recording, video_shape
                 processed_writer.write(new_frame[1])
 
             except Exception as e:
-                print(f"No new frames to write... {e}")
+                print(f"No new frames to write... {str(e)}")
 
         # Release recorders
         raw_writer.release()
@@ -92,6 +92,27 @@ def ir_capture(application_shutdown_signal, ir_frames, is_recording, video_shape
         processed_writer.release()
         print(f"Finished recording to {out_file_processed}")
 
+
+# This thread will implement saving a snapshot
+def ir_snapshot(application_shutdown_signal, ir_frames):
+
+    while not application_shutdown_signal.is_set():
+       
+        try:     
+            new_frames = ir_frames.get(block=True, timeout=1)
+            
+            cwd = os.path.dirname(os.path.realpath(__file__))
+            out_time = datetime.datetime.now().strftime("%m-%d-%Y-%H-%M-%S")
+            out_file = f"{cwd}/{out_time}"
+            out_file_raw = f"{out_file}_raw.png"
+            out_file_processed = f"{out_file}_processed.png"
+            
+            cv2.imwrite(out_file_raw, new_frames[0])
+            cv2.imwrite(out_file_processed, new_frames[1])
+
+        except Exception as e:
+            pass
+            #print(f"No new frames to write... {str(e)}")
 
 # =================================================================================
 # Post Processing
@@ -113,6 +134,7 @@ class DualCamera():
         # Sepecial modes
         self.saving = False
         self.overlay = False
+        self.snapshot = False
 
         # Internal settings / state
         self.SATURATION = 8
@@ -132,17 +154,26 @@ class DualCamera():
         self.actions_label = tk.Label(text = 'Actions')
         self.actions_label.grid(row = row_actions, column = 0)
 
-        self.save_button = tk.Button(width = 10, height = 2, text = 'Save', command=self.save)
-        self.save_button.grid(row = row_actions, column = 1)
-
-        self.overlay_button = tk.Button(width=10, height=2, text='Overlay', command=self.toggle_overlay)
-        self.overlay_button.grid(row = row_actions, column = 2)
+        self.overlay_button = tk.Button(width=10, height=2, text='Motion', command=self.toggle_overlay)
+        self.overlay_button.grid(row = row_actions, column = 1)
 
         self.close_button = tk.Button(width = 10, height = 2, text = 'Close', command=self.quit)
         self.close_button.grid(row = row_actions, column = 3)
 
+        # Buttons
+        row_recording = row_actions + 1
+
+        self.actions_label = tk.Label(text = 'Save')
+        self.actions_label.grid(row = row_recording, column = 0)
+
+        self.record_button = tk.Button(width = 10, height = 2, text = 'Record', command=self.save)
+        self.record_button.grid(row = row_recording, column = 1)
+
+        self.snapshot_button = tk.Button(width=10, height=2, text='Snapshot', command=self.take_snapshot)
+        self.snapshot_button.grid(row = row_recording, column = 2)
+
         # Calibration
-        row_calibration = row_actions + 1
+        row_calibration = row_recording + 1
         self.calibrate_label = tk.Label(text = 'Calibration')
         self.calibrate_label.grid(row = row_calibration, column = 0)
 
@@ -276,7 +307,7 @@ class DualCamera():
 
             self.capture_thread = threading.Thread(
                 target=ir_capture,
-                name="capture_thread",
+                name="recording_thread",
                 args=[  self.application_shutdown_signal, 
                         self.ir_frames, 
                         self.is_recording_signal, 
@@ -286,6 +317,20 @@ class DualCamera():
                 )
 
             self.capture_thread.start()
+
+            # Thread for saving snapshots
+            self.snapshot_frames = queue.Queue()
+
+            self.snapshot_thread = threading.Thread(
+                target=ir_snapshot,
+                name="snapshot_thread",
+                args=[  self.application_shutdown_signal, 
+                        self.snapshot_frames
+                    ]
+                )
+            
+            self.snapshot_thread.daemon = True
+            self.snapshot_thread.start()
 
         # Communication thread polls BRICON
         self.comms_thread = threading.Thread(target=self.comms_thread_fn,
@@ -370,10 +415,15 @@ class DualCamera():
                 self.mwir_cam_image = ImageTk.PhotoImage(image=image)
                 self.mwir_cam_panel.configure(image=self.mwir_cam_image)
 
-
             # Are we saving a video?
             if self.is_recording_signal.is_set():
                 self.ir_frames.put([self.new_mwir_frame, self.new_post_processed_mwir_frame])
+
+            # Is this a snapshot?
+            if self.snapshot is True:
+                self.snapshot = False
+                print("taking snapshot")
+                self.snapshot_frames.put([self.new_mwir_frame, self.new_post_processed_mwir_frame])
 
         # Get feedback from camera port
         feedback = mwir_camera_cmd.readPort()
@@ -405,6 +455,7 @@ class DualCamera():
         self.is_recording_signal.clear()
         self.root.quit()
 
+    # Recording operations
     def save(self):
         self.save_button.configure(text = 'Stop Saving', command=self.stop_save)
         self.is_recording_signal.set()
@@ -412,6 +463,10 @@ class DualCamera():
     def stop_save(self):
         self.save_button.configure(text = 'Save', command=self.save)
         self.is_recording_signal.clear()
+
+    def take_snapshot(self):
+        print("Set snapshot to true")
+        self.snapshot = True
 
     # AGC
     def SET_agc_on(self):
