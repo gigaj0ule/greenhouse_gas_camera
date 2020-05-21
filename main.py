@@ -419,6 +419,7 @@ class DualCamera():
 
                 # Reference determines value/brightness
                 hsv_overlay_frame[...,2] = reference_channel
+                #hsv_overlay_frame[...,2] = cv2.addWeighted(reference_channel, 0.4, difference_frame, 0.6, 1)
 
                 self.new_post_processed_mwir_frame = cv2.cvtColor(hsv_overlay_frame, cv2.COLOR_HSV2RGB)
 
@@ -481,11 +482,11 @@ class DualCamera():
 
     # Recording operations
     def save(self):
-        self.save_button.configure(text = 'Stop Saving', command=self.stop_save)
+        self.record_button.configure(text = 'Stop Saving', command=self.stop_save)
         self.is_recording_signal.set()
 
     def stop_save(self):
-        self.save_button.configure(text = 'Save', command=self.save)
+        self.record_button.configure(text = 'Save', command=self.save)
         self.is_recording_signal.clear()
 
     def take_snapshot(self):
