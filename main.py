@@ -189,7 +189,7 @@ class DualCamera():
         self.overlay_button.grid(row = row_actions, column = 1)
 
         self.close_button = tk.Button(width = 10, height = 2, text = 'Close', command=self.quit)
-        self.close_button.grid(row = row_actions, column = 3)
+        self.close_button.grid(row = row_actions, column = 2)
 
         # Buttons
         row_recording = row_actions + 1
@@ -605,9 +605,9 @@ class DualCamera():
     def toggle_overlay(self):
         if self.overlay:
             self.overlay = False
-            self.overlay_button.configure(text = 'Overlay')
+            self.overlay_button.configure(text = 'Motion')
         else:
             self.overlay = True
-            self.overlay_button.configure(text = 'No Overlay')
+            self.overlay_button.configure(text = 'No Motion')
 
 app = DualCamera()
