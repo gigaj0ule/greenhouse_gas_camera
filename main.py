@@ -146,7 +146,8 @@ def ir_snapshot(application_shutdown_signal, ir_frames):
 
 # =================================================================================
 # Post Processing
-OVERLAY_HUE = 0 # red
+OVERLAY_NEGATIVE_HUE = 0 # red
+OVERLAY_POSITIVE_HUE = 120 # blue
 OVERLAY_BRIGTNESS = 0.5
 EDGES_CONTRAST = 0.3
 EDGES_THRESH1 = 40
@@ -423,22 +424,25 @@ class DualCamera():
                 """
 
                 # HSV
-                difference_frame = np.clip((self.low_pass_frame - self.new_mwir_frame) * self.SATURATION, 0, 255).astype(np.uint8)
+                difference_frame = (self.new_mwir_frame - self.low_pass_frame) * self.SATURATION
+                difference_frame_abs = np.clip(np.absolute(difference_frame), 0, 255).astype(np.uint8)
                 edges_frame = cv2.Canny(new_mwir_frame_int, EDGES_THRESH1, EDGES_THRESH2)
 
                 # Combine edges with a lightened version of the original image to make a background reference image
-                reference_channel = cv2.addWeighted(edges_frame, -EDGES_CONTRAST, new_mwir_frame_int, 1 - OVERLAY_BRIGTNESS, OVERLAY_BRIGTNESS * 256)
+                reference_channel = cv2.addWeighted(edges_frame, -EDGES_CONTRAST, new_mwir_frame_int, 1 - OVERLAY_BRIGTNESS, OVERLAY_BRIGTNESS * 255)
 
                 # Set up an HSV output image to combine background as brightness and difference as color saturation
                 hsv_overlay_frame = np.zeros((self.low_pass_frame.shape[0], self.low_pass_frame.shape[1], 3), np.uint8)
-                hsv_overlay_frame[...,0] = OVERLAY_HUE
+
+                # Determine overlay hue depending on sign of difference
+                hsv_overlay_frame[...,0] = np.where(difference_frame >= 0, OVERLAY_POSITIVE_HUE, OVERLAY_NEGATIVE_HUE)
 
                 # Difference determines color saturation/intensity
-                hsv_overlay_frame[...,1] = difference_frame
+                hsv_overlay_frame[...,1] = difference_frame_abs
 
                 # Reference determines value/brightness
                 hsv_overlay_frame[...,2] = reference_channel
-                #hsv_overlay_frame[...,2] = cv2.addWeighted(reference_channel, 0.4, difference_frame, 0.6, 1)
+                #hsv_overlay_frame[...,2] = cv2.addWeighted(reference_channel, 0.4, difference_frame_abs, 0.6, 1)
 
                 self.new_post_processed_mwir_frame = cv2.cvtColor(hsv_overlay_frame, cv2.COLOR_HSV2RGB)
 
