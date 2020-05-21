@@ -50,7 +50,7 @@ mwir_camera_cmd = axsys_control(mwir_camera_serial_port, camera_type=mwir_camera
 
 # =================================================================================
 # This thread will implement saving a video
-def ir_capture(application_shutdown_signal, raw_ir_frames, is_recording, video_shape, video_fps):
+def ir_capture(application_shutdown_signal, ir_frames, is_recording, video_shape, video_fps):
 
     while not application_shutdown_signal.is_set():
         
@@ -62,25 +62,32 @@ def ir_capture(application_shutdown_signal, raw_ir_frames, is_recording, video_s
         cwd = os.path.dirname(os.path.realpath(__file__))
         out_time = datetime.datetime.now().strftime("%m-%d-%Y-%H-%M-%S")
         out_file = f"{cwd}/{out_time}"
+        out_file_raw = f"{out_file}_raw"
+        out_file_processed = f"{out_file}_processed"
 
         # Debug
         print(f"Starting recording to {out_file}")
 
         fourcc = cv2.VideoWriter_fourcc(*'avc1')
-        writer = cv2.VideoWriter(out_file, fourcc, video_fps, (video_shape[1], video_shape[0]), True)
+
+        raw_writer = cv2.VideoWriter(out_file_raw, fourcc, video_fps, (video_shape[1], video_shape[0]), True)
+        processed_writer = cv2.VideoWriter(out_file_processed, fourcc, video_fps, (video_shape[1], video_shape[0]), True)
 
         while is_recording.is_set():
             try:
-                new_frame = raw_ir_frames.get(block=True, timeout=1)
-                writer.write(new_frame)
+                new_frame = ir_frames.get(block=True, timeout=1)
+                raw_writer.write(new_frame[0])
+                processed_writer.write(new_frame[1])
 
             except:
                 print("No new frames to write...")
 
-        writer.release()
+        # Release recorders
+        raw_writer.release()
+        print(f"Finished recording to {out_file_raw}")
 
-        # Debug
-        print(f"Finished recording to {out_file}")
+        processed_writer.release()
+        print(f"Finished recording to {out_file_processed}")
 
 
 # =================================================================================
@@ -236,6 +243,7 @@ class DualCamera():
 
         # Stuff for detection
         self.new_mwir_frame = None
+        self.new_post_processed_mwir_frame = None
         self.low_pass_frame = None
 
         # App kill switch
@@ -258,13 +266,18 @@ class DualCamera():
             self.mwir_camera_fps = mwir_camera.get(cv2.CAP_PROP_FPS)
 
             # thread for reading from sensor hardware intro an image queue           
-            self.raw_ir_frames = queue.Queue()
+            self.ir_frames = queue.Queue()
             self.is_recording_signal = threading.Event()
 
             self.capture_thread = threading.Thread(
                 target=ir_capture,
                 name="capture_thread",
-                args=[self.application_shutdown_signal, self.raw_ir_frames, self.is_recording_signal, self.orig_video_shape, self.mwir_camera_fps]
+                args=[  self.application_shutdown_signal, 
+                        self.ir_frames, 
+                        self.is_recording_signal, 
+                        self.orig_video_shape, 
+                        self.mwir_camera_fps
+                    ]
                 )
 
             self.capture_thread.start()
@@ -294,50 +307,51 @@ class DualCamera():
                 new_mwir_frame_int = cv2.cvtColor(mwir_frame, cv2.COLOR_BGR2GRAY)
                 self.new_mwir_frame = new_mwir_frame_int.astype(np.float32)
                 
+                # RGB
+                """
+                differenceFrame = np.clip((self.low_pass_frame - self.new_mwir_frame) * self.SATURATION, 0, 255).astype(np.float32)
+                edges = (255 - cv2.Canny(self.new_mwir_frame.astype(np.uint8), EDGES_THRESH1, EDGES_THRESH2) * EDGES_CONTRAST).astype(np.uint8)
+                
+                # Highlight edges
+                egdes_frame = self.new_mwir_frame.astype(np.float32)
+                egdes_frame[edges != 255] = [0]
+
+                # Overlay Motion
+                weighted_difference_channel = cv2.addWeighted(egdes_frame, 0.4, differenceFrame, 0.6, 1)
+
+                # Color format seems to be BRG
+                self.overlay_frame = cv2.merge((weighted_difference_channel, egdes_frame, egdes_frame))
+                
+                # Export frame
+                window_preview_frame = self.overlay_frame.astype(np.uint8)
+                
+                #cv2.cvtColor(self.overlay_frame, cv2.COLOR_HSV2BGR)
+                #window_preview_frame = self.new_mwir_frame
+                """
+
+                # HSV
+                difference_frame = np.clip((self.low_pass_frame - self.new_mwir_frame) * self.SATURATION, 0, 255).astype(np.uint8)
+                edges_frame = cv2.Canny(new_mwir_frame_int, EDGES_THRESH1, EDGES_THRESH2)
+
+                # Combine edges with a lightened version of the original image to make a background reference image
+                reference_channel = cv2.addWeighted(edges_frame, -EDGES_CONTRAST, new_mwir_frame_int, 1 - OVERLAY_BRIGTNESS, OVERLAY_BRIGTNESS * 256)
+
+                # Set up an HSV output image to combine background as brightness and difference as color saturation
+                hsv_overlay_frame = np.zeros((self.low_pass_frame.shape[0], self.low_pass_frame.shape[1], 3), np.uint8)
+                hsv_overlay_frame[...,0] = OVERLAY_HUE
+
+                # Difference determines color saturation/intensity
+                hsv_overlay_frame[...,1] = difference_frame
+
+                # Reference determines value/brightness
+                hsv_overlay_frame[...,2] = reference_channel
+
+                self.new_post_processed_mwir_frame = cv2.cvtColor(hsv_overlay_frame, cv2.COLOR_HSV2RGB)
+
+                # What does preview show?
                 if self.overlay:
-                    
-                    # RGB
-                    """
-                    differenceFrame = np.clip((self.low_pass_frame - self.new_mwir_frame) * self.SATURATION, 0, 255).astype(np.float32)
-                    edges = (255 - cv2.Canny(self.new_mwir_frame.astype(np.uint8), EDGES_THRESH1, EDGES_THRESH2) * EDGES_CONTRAST).astype(np.uint8)
-                  
-                    # Highlight edges
-                    egdes_frame = self.new_mwir_frame.astype(np.float32)
-                    egdes_frame[edges != 255] = [0]
-
-                    # Overlay Motion
-                    weighted_difference_channel = cv2.addWeighted(egdes_frame, 0.4, differenceFrame, 0.6, 1)
-
-                    # Color format seems to be BRG
-                    self.overlay_frame = cv2.merge((weighted_difference_channel, egdes_frame, egdes_frame))
-                    
-                    # Export frame
-                    window_preview_frame = self.overlay_frame.astype(np.uint8)
-                    
-                    #cv2.cvtColor(self.overlay_frame, cv2.COLOR_HSV2BGR)
-                    #window_preview_frame = self.new_mwir_frame
-                    """
-
-                    # HSV
-                    difference_frame = np.clip((self.low_pass_frame - self.new_mwir_frame) * self.SATURATION, 0, 255).astype(np.uint8)
-                    edges_frame = cv2.Canny(new_mwir_frame_int, EDGES_THRESH1, EDGES_THRESH2)
-
-                    # Combine edges with a lightened version of the original image to make a background reference image
-                    reference_channel = cv2.addWeighted(edges_frame, -EDGES_CONTRAST, new_mwir_frame_int, 1 - OVERLAY_BRIGTNESS, OVERLAY_BRIGTNESS * 256)
-
-                    # Set up an HSV output image to combine background as brightness and difference as color saturation
-                    hsv_overlay_frame = np.zeros((self.low_pass_frame.shape[0], self.low_pass_frame.shape[1], 3), np.uint8)
-                    hsv_overlay_frame[...,0] = OVERLAY_HUE
-
-                    # Difference determines color saturation/intensity
-                    hsv_overlay_frame[...,1] = difference_frame
-
-                    # Reference determines value/brightness
-                    hsv_overlay_frame[...,2] = reference_channel
-
                     # Color format is RGB
-                    window_preview_frame = cv2.cvtColor(hsv_overlay_frame, cv2.COLOR_HSV2RGB)
-
+                    window_preview_frame = self.new_post_processed_mwir_frame
                 else:
                     window_preview_frame = self.new_mwir_frame.astype(np.uint8)
                 
@@ -354,7 +368,7 @@ class DualCamera():
 
             # Are we saving a video?
             if self.is_recording_signal.is_set():
-                self.raw_ir_frames.put(self.new_mwir_frame)
+                self.ir_frames.put([self.new_mwir_frame, self.new_post_processed_mwir_frame])
 
         # Get feedback from camera port
         feedback = mwir_camera_cmd.readPort()
