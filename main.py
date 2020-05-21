@@ -61,7 +61,7 @@ def ir_capture(application_shutdown_signal, ir_frames, is_recording, video_shape
         # Create an output file with name as present datetime
         cwd = os.path.dirname(os.path.realpath(__file__))
         out_time = datetime.datetime.now().strftime("%m-%d-%Y-%H-%M-%S")
-        out_file = f"{cwd}/{out_time}"
+        out_file = f"{cwd}/videos/{out_time}"
         out_file_raw = f"{out_file}_raw"
         out_file_processed = f"{out_file}_processed"
 
@@ -103,7 +103,7 @@ def ir_snapshot(application_shutdown_signal, ir_frames):
             
             cwd = os.path.dirname(os.path.realpath(__file__))
             out_time = datetime.datetime.now().strftime("%m-%d-%Y-%H-%M-%S")
-            out_file = f"{cwd}/{out_time}"
+            out_file = f"{cwd}/snapshots/{out_time}"
             out_file_raw = f"{out_file}_raw.png"
             out_file_processed = f"{out_file}_processed.png"
             
