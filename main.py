@@ -245,7 +245,7 @@ class DualCamera():
 
             if mwir_frame is not None:
                 #frame = imutils.resize(frame, height=240)
-                self.new_mwir_frame = cv2.cvtColor(mwir_frame, cv2.COLOR_BGR2RGB)
+                self.new_mwir_frame = cv2.cvtColor(mwir_frame, cv2.COLOR_BGR2GRAY)
                 mwir_got_new_frame = True
 
             # Overlay image?
@@ -253,8 +253,13 @@ class DualCamera():
                 
                 if self.overlay:
                     
-                    average_frame = ((self.last_mwir_frame + self.new_mwir_frame) / 2).astype(np.uint8)
-                    window_preview_frame = average_frame
+                    differenceFrame = np.clip((self.last_mwir_frame - self.new_mwir_frame) * SATURATION, 0, 255).astype(np.uint8)
+                    edges = (255 - cv2.Canny(self.new_mwir_frame.astype(np.uint8), EDGES_THRESH1, EDGES_THRESH2) * EDGES_CONTRAST)
+
+                    self.overlay_frame[...,1] = differenceFrame
+                    self.overlay_frame[...,2] = edges
+
+                    window_preview_frame = self.overlay_frame
                     #window_preview_frame = self.new_mwir_frame
 
                 else:
