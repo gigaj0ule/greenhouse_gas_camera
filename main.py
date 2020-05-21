@@ -66,21 +66,24 @@ def ir_capture(application_shutdown_signal, ir_frames, is_recording, video_shape
         out_file_processed = f"{out_file}_processed"
 
         # Debug
-        print(f"Starting recording to {out_file}")
-
         fourcc = cv2.VideoWriter_fourcc(*'avc1')
 
+        # Start Recording
+        print(f"Starting recording to {out_file_raw}")
         raw_writer = cv2.VideoWriter(out_file_raw, fourcc, video_fps, (video_shape[1], video_shape[0]), True)
+
+        print(f"Starting recording to {out_file_processed}")
         processed_writer = cv2.VideoWriter(out_file_processed, fourcc, video_fps, (video_shape[1], video_shape[0]), True)
 
+        # Get new frames and write them to disk
         while is_recording.is_set():
             try:
                 new_frame = ir_frames.get(block=True, timeout=1)
                 raw_writer.write(new_frame[0])
                 processed_writer.write(new_frame[1])
 
-            except:
-                print("No new frames to write...")
+            except Exception as e:
+                print(f"No new frames to write... {e}")
 
         # Release recorders
         raw_writer.release()
@@ -241,17 +244,16 @@ class DualCamera():
         self.bias_slider.set(0x05)
         """
 
-        # Stuff for detection
-        self.new_mwir_frame = None
-        self.new_post_processed_mwir_frame = None
-        self.low_pass_frame = None
-
         # App kill switch
         self.application_shutdown_signal = threading.Event()
 
         # Grab an image from the camera so we know what the stream looks like
         if mwir_camera is not None:
             ret, mwir_frame = mwir_camera.read()
+
+            # New frames
+            self.new_mwir_frame = None
+            self.new_post_processed_mwir_frame = None
 
             # Rescale video for display
             self.new_video_height = 660
@@ -264,6 +266,9 @@ class DualCamera():
             # Save video shape
             self.orig_video_shape = mwir_frame.shape
             self.mwir_camera_fps = mwir_camera.get(cv2.CAP_PROP_FPS)
+
+            # Low pass frame
+            self.low_pass_frame = np.zeros((self.orig_video_shape[0], self.orig_video_shape[1]), np.float32)
 
             # thread for reading from sensor hardware intro an image queue           
             self.ir_frames = queue.Queue()
