@@ -187,7 +187,6 @@ class DualCamera():
         """
 
         # Stuff for detection
-        self.last_mwir_frame = None
         self.new_mwir_frame = None
         self.overlay_frame = None
         self.empty_grey_frame = None 
@@ -204,7 +203,6 @@ class DualCamera():
             self.new_video_width = int(video_scale_factor * mwir_frame.shape[1])
             self.video_display_size = (self.new_video_width, self.new_video_height)
 
-            self.last_mwir_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 3), np.float32)
             self.new_mwir_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 3), np.float32)
             self.low_pass_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1]), np.float32)
             self.overlay_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 3), np.float32)
@@ -314,7 +312,6 @@ class DualCamera():
         self.root.after(10, self.ticktock)
 
         # Save old frame
-        self.last_mwir_frame = self.new_mwir_frame.copy()
         self.low_pass_frame += LPF_constant * (self.new_mwir_frame - self.low_pass_frame)
 
 
