@@ -51,6 +51,8 @@ mwir_camera_cmd = axsys_control(mwir_camera_serial_port, camera_type=mwir_camera
 
 # Post Processing
 SATURATION = 8
+OVERLAY_HUE = 0 # red
+OVERLAY_BRIGTNESS = 0.5
 EDGES_CONTRAST = 0.3
 EDGES_THRESH1 = 40
 EDGES_THRESH2 = 80
@@ -188,8 +190,6 @@ class DualCamera():
 
         # Stuff for detection
         self.new_mwir_frame = None
-        self.overlay_frame = None
-        self.empty_grey_frame = None 
         self.low_pass_frame = None
 
         # Grab an image from the camera so we know what the stream looks like
@@ -202,12 +202,6 @@ class DualCamera():
             video_scale_factor =  self.new_video_height / self.orig_video_height
             self.new_video_width = int(video_scale_factor * mwir_frame.shape[1])
             self.video_display_size = (self.new_video_width, self.new_video_height)
-
-            self.new_mwir_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 3), np.float32)
-            self.low_pass_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1]), np.float32)
-            self.overlay_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 3), np.float32)
-            self.empty_grey_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 1), np.float32)
-
 
         # thread for reading from sensor hardware intro an image queue           
         self.ir_images = queue.LifoQueue()
@@ -242,19 +236,16 @@ class DualCamera():
         # grab an image from the camera
         if mwir_camera is not None:
             ret, mwir_frame = mwir_camera.read()
-            mwir_got_new_frame = False
 
             if mwir_frame is not None:
                 #frame = imutils.resize(frame, height=240)
-                self.new_mwir_frame = cv2.cvtColor(mwir_frame, cv2.COLOR_BGR2GRAY)
-                mwir_got_new_frame = True
-
-            # Overlay image?
-            if mwir_got_new_frame:
+                new_mwir_frame_int = cv2.cvtColor(mwir_frame, cv2.COLOR_BGR2GRAY)
+                self.new_mwir_frame = new_mwir_frame_int.astype(np.float32)
                 
                 if self.overlay:
                     
-                    # The magic...
+                    # RGB
+                    """
                     differenceFrame = np.clip((self.low_pass_frame - self.new_mwir_frame) * SATURATION, 0, 255).astype(np.float32)
                     edges = (255 - cv2.Canny(self.new_mwir_frame.astype(np.uint8), EDGES_THRESH1, EDGES_THRESH2) * EDGES_CONTRAST).astype(np.uint8)
                   
@@ -273,9 +264,30 @@ class DualCamera():
                     
                     #cv2.cvtColor(self.overlay_frame, cv2.COLOR_HSV2BGR)
                     #window_preview_frame = self.new_mwir_frame
+                    """
+
+                    # HSV
+                    difference_frame = np.clip((self.low_pass_frame - self.new_mwir_frame) * SATURATION, 0, 255).astype(np.uint8)
+                    edges_frame = cv2.Canny(new_mwir_frame_int, EDGES_THRESH1, EDGES_THRESH2)
+
+                    # Combine edges with a lightened version of the original image to make a background reference image
+                    reference_channel = cv2.addWeighted(edges_frame, -EDGES_CONTRAST, new_mwir_frame_int, 1 - OVERLAY_BRIGTNESS, OVERLAY_BRIGTNESS * 256)
+
+                    # Set up an HSV output image to combine background as brightness and difference as color saturation
+                    hsv_overlay_frame = np.zeros((self.low_pass_frame.shape[0], self.low_pass_frame.shape[1], 3), np.uint8)
+                    hsv_overlay_frame[...,0] = OVERLAY_HUE
+
+                    # Difference determines color saturation/intensity
+                    hsv_overlay_frame[...,1] = difference_frame
+
+                    # Reference determines value/brightness
+                    hsv_overlay_frame[...,2] = reference_channel
+
+                    # Color format is RGB
+                    window_preview_frame = cv2.cvtColor(hsv_overlay_frame, cv2.COLOR_HSV2RGB)
 
                 else:
-                    window_preview_frame = self.new_mwir_frame
+                    window_preview_frame = self.new_mwir_frame.astype(np.uint8)
                 
                 # Scale 
                 scaled_mwir_frame = cv2.resize(window_preview_frame, self.video_display_size, interpolation = cv2.INTER_NEAREST)
@@ -312,7 +324,10 @@ class DualCamera():
         self.root.after(10, self.ticktock)
 
         # Save old frame
-        self.low_pass_frame += LPF_constant * (self.new_mwir_frame - self.low_pass_frame)
+        if self.low_pass_frame is None:
+            self.low_pass_frame = self.new_mwir_frame
+        else:
+            self.low_pass_frame += LPF_constant * (self.new_mwir_frame - self.low_pass_frame)
 
 
     # Update brightness and contrast sliders
