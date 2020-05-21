@@ -263,6 +263,7 @@ class DualCamera():
                     # Overlay Motion
                     weighted_difference_channel = cv2.addWeighted(egdes_frame, 0.8, differenceFrame, 0.2, 1)
 
+                    # Color format seems to be BRG
                     self.overlay_frame = cv2.merge((egdes_frame, weighted_difference_channel, egdes_frame))
                     
                     # Export frame
