@@ -51,6 +51,8 @@ mwir_camera_cmd = axsys_control(mwir_camera_serial_port, camera_type=mwir_camera
 
 # Post Processing
 SATURATION = 8
+OVERLAY_HUE = 0 # red
+OVERLAY_BRIGTNESS = 0.5
 EDGES_CONTRAST = 0.3
 EDGES_THRESH1 = 40
 EDGES_THRESH2 = 80
@@ -255,24 +257,27 @@ class DualCamera():
                 if self.overlay:
                     
                     # The magic...
-                    differenceFrame = np.clip((self.low_pass_frame - self.new_mwir_frame) * SATURATION, 0, 255).astype(np.float32)
-                    edges = (255 - cv2.Canny(self.new_mwir_frame.astype(np.uint8), EDGES_THRESH1, EDGES_THRESH2) * EDGES_CONTRAST).astype(np.uint8)
-                  
-                    # Highlight edges
-                    egdes_frame = self.new_mwir_frame.astype(np.float32)
-                    egdes_frame[edges != 255] = [0]
+                    difference_frame = np.clip((self.low_pass_frame.astype(np.int16) - self.new_mwir_frame.astype(np.int16)) * SATURATION, 0, 255).astype(np.uint8)
+                    edges_frame = cv2.Canny(self.new_mwir_frame.astype(np.uint8), EDGES_THRESH1, EDGES_THRESH2)
 
-                    # Overlay Motion
-                    weighted_difference_channel = cv2.addWeighted(egdes_frame, 0.8, differenceFrame, 0.2, 1)
+                    # Combine edges with a lightened version of the original image to make a background reference image
+                    reference_channel = cv2.addWeighted(edges_frame, -EDGES_CONTRAST, self.new_mwir_frame, 1 - OVERLAY_BRIGTNESS, OVERLAY_BRIGTNESS * 256)
 
-                    # Color format seems to be BRG
-                    self.overlay_frame = cv2.merge((weighted_difference_channel, egdes_frame, egdes_frame))
+                    # Set up an HSV output image to combine background as brightness and difference as color saturation
+                    hsv_overlay_frame = np.zeros((self.low_pass_frame.shape[0], self.low_pass_frame.shape[1], 3), np.uint8)
+                    hsv_overlay_frame[...,0] = OVERLAY_HUE
+
+                    # Difference determines color saturation/intensity
+                    hsv_overlay_frame[...,1] = difference_frame
+
+                    # Reference determines value/brightness
+                    hsv_overlay_frame[...,2] = reference_channel
+
+                    # Color format is RGB
+                    self.overlay_frame = cv2.cvtColor(hsv_overlay_frame, cv2.COLOR_HSV2RGB)
                     
                     # Export frame
-                    window_preview_frame = self.overlay_frame.astype(np.uint8)
-                    
-                    #cv2.cvtColor(self.overlay_frame, cv2.COLOR_HSV2BGR)
-                    #window_preview_frame = self.new_mwir_frame
+                    window_preview_frame = self.overlay_frame
 
                 else:
                     window_preview_frame = self.new_mwir_frame
