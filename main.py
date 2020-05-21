@@ -105,7 +105,7 @@ def ir_capture(application_shutdown_signal, ir_frames, is_recording, video_shape
 def ir_snapshot(application_shutdown_signal, ir_frames):
 
     # Output dir
-    snapshot_dir = f"{os.path.dirname(os.path.realpath(__file__))}/videos"
+    snapshot_dir = f"{os.path.dirname(os.path.realpath(__file__))}/snapshots"
 
     try:
         os.mkdir(snapshot_dir)
@@ -122,10 +122,16 @@ def ir_snapshot(application_shutdown_signal, ir_frames):
             out_file_raw = f"{out_file}_raw.png"
             out_file_processed = f"{out_file}_processed.png"
             
-            cv2.imwrite(out_file_raw, new_frames[0])
+            new_frame_brg = new_frames[0]
+            new_frame_rgb = cv2.cvtColor(new_frame_brg, cv2.COLOR_BGR2RGB)
+
+            cv2.imwrite(out_file_raw, new_frame_brg)
             print(f"Saved snapshot to {out_file_raw}")
 
-            cv2.imwrite(out_file_processed, new_frames[1])
+            new_processed_frame_brg = new_frames[1]
+            new_processed_frame_rgb = cv2.cvtColor(new_processed_frame_brg, cv2.COLOR_BGR2RGB)
+
+            cv2.imwrite(out_file_processed, new_processed_frame_rgb)
             print(f"Saved processed snapshot to {out_file_processed}")
 
         except Exception as e:
