@@ -201,10 +201,10 @@ class DualCamera():
             self.new_video_width = int(video_scale_factor * mwir_frame.shape[1])
             self.video_display_size = (self.new_video_width, self.new_video_height)
 
-            self.last_mwir_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 3), np.uint8)
-            self.new_mwir_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 3), np.uint8)
-            self.overlay_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 3), np.uint8)
-            self.empty_grey_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 1), np.uint8)            
+            self.last_mwir_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 3), np.float32)
+            self.new_mwir_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 3), np.float32)
+            self.overlay_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 3), np.float32)
+            self.empty_grey_frame = np.zeros((mwir_frame.shape[0], mwir_frame.shape[1], 1), np.float32)            
 
 
         # thread for reading from sensor hardware intro an image queue           
@@ -253,21 +253,21 @@ class DualCamera():
                 if self.overlay:
                     
                     # The magic...
-                    differenceFrame = np.clip((self.last_mwir_frame - self.new_mwir_frame) * SATURATION / 2, 0, 255).astype(np.uint8)
-                    edges = (255 - cv2.Canny(self.new_mwir_frame.astype(np.uint8), EDGES_THRESH1, EDGES_THRESH2) * EDGES_CONTRAST).astype(np.uint8)
+                    differenceFrame = np.clip((self.last_mwir_frame - self.new_mwir_frame) * SATURATION, 0, 255).astype(np.float32)
+                    edges = (255 - cv2.Canny(self.new_mwir_frame.astype(np.uint8), EDGES_THRESH1, EDGES_THRESH2) * EDGES_CONTRAST).astype(np.float32)
                   
                     # Highlight edges
-                    egdes_frame = self.new_mwir_frame
+                    egdes_frame = self.new_mwir_frame.astype(np.float32)
                     egdes_frame[edges != 255] = [0]
 
                     # Overlay Motion
                     weighted_difference_channel = cv2.addWeighted(egdes_frame, 0.8, differenceFrame, 0.2, 1)
 
                     # Color format seems to be BRG
-                    self.overlay_frame = cv2.merge((egdes_frame, weighted_difference_channel, egdes_frame))
+                    self.overlay_frame = cv2.merge((weighted_difference_channel, egdes_frame, egdes_frame))
                     
                     # Export frame
-                    window_preview_frame = self.overlay_frame
+                    window_preview_frame = self.overlay_frame.astype(np.uint8)
                     
                     #cv2.cvtColor(self.overlay_frame, cv2.COLOR_HSV2BGR)
                     #window_preview_frame = self.new_mwir_frame
