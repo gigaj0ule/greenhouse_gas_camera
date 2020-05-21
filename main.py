@@ -52,16 +52,24 @@ mwir_camera_cmd = axsys_control(mwir_camera_serial_port, camera_type=mwir_camera
 # This thread will implement saving a video
 def ir_capture(application_shutdown_signal, ir_frames, is_recording, video_shape, video_fps):
 
+    # Output dir
+    video_dir = f"{os.path.dirname(os.path.realpath(__file__))}/videos"
+
+    try:
+        os.mkdir(video_dir)
+    except Exception as e:
+        print(f"ERROR {str(e)}: Could not make video output directory? {video_dir}")
+
     while not application_shutdown_signal.is_set():
         
         # Wait until we started recording
         is_recording.wait()
 
         # We started recording!
+
         # Create an output file with name as present datetime
-        cwd = os.path.dirname(os.path.realpath(__file__))
         out_time = datetime.datetime.now().strftime("%m-%d-%Y-%H-%M-%S")
-        out_file = f"{cwd}/videos/{out_time}"
+        out_file = f"{video_dir}/{out_time}"
         out_file_raw = f"{out_file}_raw"
         out_file_processed = f"{out_file}_processed"
 
@@ -96,14 +104,21 @@ def ir_capture(application_shutdown_signal, ir_frames, is_recording, video_shape
 # This thread will implement saving a snapshot
 def ir_snapshot(application_shutdown_signal, ir_frames):
 
+    # Output dir
+    snapshot_dir = f"{os.path.dirname(os.path.realpath(__file__))}/videos"
+
+    try:
+        os.mkdir(snapshot_dir)
+    except Exception as e:
+        print(f"ERROR {str(e)}: Could not make snapshot output directory? {snapshot_dir}")
+
     while not application_shutdown_signal.is_set():
        
         try:     
             new_frames = ir_frames.get(block=True, timeout=1)
             
-            cwd = os.path.dirname(os.path.realpath(__file__))
             out_time = datetime.datetime.now().strftime("%m-%d-%Y-%H-%M-%S")
-            out_file = f"{cwd}/snapshots/{out_time}"
+            out_file = f"{snapshot_dir}/{out_time}"
             out_file_raw = f"{out_file}_raw.png"
             out_file_processed = f"{out_file}_processed.png"
             
