@@ -70,11 +70,11 @@ def ir_capture(application_shutdown_signal, ir_frames, is_recording, video_shape
         # Create an output file with name as present datetime
         out_time = datetime.datetime.now().strftime("%m-%d-%Y-%H-%M-%S")
         out_file = f"{video_dir}/{out_time}"
-        out_file_raw = f"{out_file}_raw"
-        out_file_processed = f"{out_file}_processed"
+        out_file_raw = f"{out_file}_raw.mp4"
+        out_file_processed = f"{out_file}_processed.mp4"
 
         # Debug
-        fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 
         # Start Recording
         print(f"Starting recording to {out_file_raw}")
@@ -87,8 +87,16 @@ def ir_capture(application_shutdown_signal, ir_frames, is_recording, video_shape
         while is_recording.is_set():
             try:
                 new_frame = ir_frames.get(block=True, timeout=1)
-                raw_writer.write(new_frame[0])
-                processed_writer.write(new_frame[1])
+
+                # Save raw frame
+                new_raw_frame = new_frame[0].astype(np.uint8)
+                new_raw_frame_rgb = cv2.cvtColor(new_raw_frame, cv2.COLOR_BGR2RGB)
+                raw_writer.write(new_raw_frame_rgb)
+
+                # Save processed frame
+                new_processed_frame = new_frame[1].astype(np.uint8)
+                new_processed_frame_rgb = cv2.cvtColor(new_processed_frame, cv2.COLOR_BGR2RGB)
+                processed_writer.write(new_processed_frame_rgb)
 
             except Exception as e:
                 print(f"No new frames to write... {str(e)}")
@@ -122,14 +130,14 @@ def ir_snapshot(application_shutdown_signal, ir_frames):
             out_file_raw = f"{out_file}_raw.png"
             out_file_processed = f"{out_file}_processed.png"
             
-            new_frame_brg = new_frames[0]
-            new_frame_rgb = cv2.cvtColor(new_frame_brg, cv2.COLOR_BGR2RGB)
+            new_frame = new_frames[0]
+            new_frame_rgb = cv2.cvtColor(new_frame, cv2.COLOR_BGR2RGB)
 
-            cv2.imwrite(out_file_raw, new_frame_brg)
+            cv2.imwrite(out_file_raw, new_frame_rgb)
             print(f"Saved snapshot to {out_file_raw}")
 
-            new_processed_frame_brg = new_frames[1]
-            new_processed_frame_rgb = cv2.cvtColor(new_processed_frame_brg, cv2.COLOR_BGR2RGB)
+            new_processed_frame = new_frames[1]
+            new_processed_frame_rgb = cv2.cvtColor(new_processed_frame, cv2.COLOR_BGR2RGB)
 
             cv2.imwrite(out_file_processed, new_processed_frame_rgb)
             print(f"Saved processed snapshot to {out_file_processed}")
