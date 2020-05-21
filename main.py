@@ -58,7 +58,7 @@ def ir_capture(application_shutdown_signal, ir_frames, is_recording, video_shape
     try:
         os.mkdir(video_dir)
     except Exception as e:
-        print(f"ERROR {str(e)}: Could not make video output directory? {video_dir}")
+        print(f"ERROR {str(e)}: {video_dir}")
 
     while not application_shutdown_signal.is_set():
         
@@ -110,7 +110,7 @@ def ir_snapshot(application_shutdown_signal, ir_frames):
     try:
         os.mkdir(snapshot_dir)
     except Exception as e:
-        print(f"ERROR {str(e)}: Could not make snapshot output directory? {snapshot_dir}")
+        print(f"ERROR {str(e)}: {snapshot_dir}")
 
     while not application_shutdown_signal.is_set():
        
